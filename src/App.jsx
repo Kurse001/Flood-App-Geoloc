@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -21,7 +21,9 @@ function RecenterMap({ position }) {
 
 function App() {
   const [position, setPosition] = useState([22.5726, 88.3639]); // default: Kolkata
+  const [riskZones, setRiskZones] = useState([]);
 
+  // Get user's real location
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -39,6 +41,15 @@ function App() {
     }
   }, []);
 
+  // Fetch risk zones from backend whenever position changes
+  useEffect(() => {
+    const [lat, lng] = position;
+    fetch(`https://flood-backend-xk0l.onrender.com/risk-zones?lat=${lat}&lng=${lng}`)
+      .then(res => res.json())
+      .then(data => setRiskZones(data.zones))
+      .catch(err => console.error('Failed to fetch risk zones:', err));
+  }, [position]);
+
   return (
     <div>
       <h1>Flood Nowcasting App</h1>
@@ -48,6 +59,18 @@ function App() {
         <Marker position={position}>
           <Popup>You are here</Popup>
         </Marker>
+        {riskZones.map((zone) => (
+          <Circle
+            key={zone.zone_id}
+            center={[zone.lat, zone.lng]}
+            radius={300}
+            pathOptions={{
+              color: zone.risk_level === 'high' ? 'red' : 'orange',
+              fillColor: zone.risk_level === 'high' ? 'red' : 'orange',
+              fillOpacity: 0.4
+            }}
+          />
+        ))}
       </MapContainer>
     </div>
   );
