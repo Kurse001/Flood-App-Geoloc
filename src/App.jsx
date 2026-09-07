@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-// firebase.js
-import { initializeApp } from "firebase/app";
-import { getMessaging } from "firebase/messaging";
+import { getToken, onMessage } from "firebase/messaging";
+import { messaging } from "./firebase";
 
-const firebaseApp = initializeApp({ /* your existing config */ });
-export const messaging = getMessaging(firebaseApp);
+const BACKEND_URL = "https://flood-backend-xk0l.onrender.com";
 
 // Fix for default marker icon not showing (using CDN instead of local imports)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -25,6 +23,19 @@ function RecenterMap({ position }) {
   return null;
 }
 
+async function registerForNotifications(lat, lng) {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const token = await getToken(messaging, { vapidKey: "YOUR_VAPID_KEY" });
+
+  await fetch(`${BACKEND_URL}/register-device`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, lat, lng }),
+  });
+}
+
 function App() {
   const [position, setPosition] = useState([22.5726, 88.3639]); // default: Kolkata
   const [riskZones, setRiskZones] = useState([]);
@@ -34,8 +45,10 @@ function App() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setPosition([pos.coords.latitude, pos.coords.longitude]);
+          const { latitude, longitude } = pos.coords;
+          setPosition([latitude, longitude]);
           console.log("Accuracy in meters:", pos.coords.accuracy);
+          registerForNotifications(latitude, longitude);
         },
         (error) => {
           console.log("Location access denied or unavailable:", error.message);
@@ -47,10 +60,17 @@ function App() {
     }
   }, []);
 
+  // Listen for foreground notifications
+  useEffect(() => {
+    onMessage(messaging, (payload) => {
+      alert(`${payload.notification.title}: ${payload.notification.body}`);
+    });
+  }, []);
+
   // Fetch risk zones from backend whenever position changes
   useEffect(() => {
     const [lat, lng] = position;
-    fetch(`https://flood-backend-xk0l.onrender.com/risk-zones?lat=${lat}&lng=${lng}`)
+    fetch(`${BACKEND_URL}/risk-zones?lat=${lat}&lng=${lng}`)
       .then(res => res.json())
       .then(data => setRiskZones(data.zones))
       .catch(err => console.error('Failed to fetch risk zones:', err));
@@ -78,50 +98,6 @@ function App() {
           />
         ))}
       </MapContainer>
-    </div>
-  );
-}
-
-export default App;
-import { useEffect } from "react";
-import { getToken, onMessage } from "firebase/messaging";
-import { messaging } from "./firebase";
-
-// --- Notification helper functions ---
-
-async function registerForNotifications(lat, lng) {
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return;
-
-  const token = await getToken(messaging, { vapidKey: "YOUR_VAPID_KEY" });
-
-  await fetch(`${BACKEND_URL}/register-device`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, lat, lng }),
-  });
-}
-
-// --- Main App component ---
-
-function App() {
-  useEffect(() => {
-    // get user location and register device for notifications
-    navigator.geolocation.getCurrentPosition((position) => {
-      const { latitude, longitude } = position.coords;
-      registerForNotifications(latitude, longitude);
-    });
-
-    // listen for notifications while app is open (foreground)
-    onMessage(messaging, (payload) => {
-      alert(`${payload.notification.title}: ${payload.notification.body}`);
-      // replace alert() with a nicer in-app toast/banner later
-    });
-  }, []);
-
-  return (
-    <div>
-      {/* your existing map/JSX stays here — untouched */}
     </div>
   );
 }
