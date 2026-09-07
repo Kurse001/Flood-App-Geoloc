@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getToken, onMessage } from "firebase/messaging";
+import { messaging } from "./firebase";
+
+const BACKEND_URL = "https://flood-backend-xk0l.onrender.com";
 
 // Fix for default marker icon not showing (using CDN instead of local imports)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -19,6 +23,19 @@ function RecenterMap({ position }) {
   return null;
 }
 
+async function registerForNotifications(lat, lng) {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const token = await getToken(messaging, { vapidKey: "BKdWjY06m77EdHzb5Sq8ZZhZLkJAjMgCamdgLTHXq7dOlEt4B3gdC9VBXzQjzv-_yNn_hsidv5hWKTDo4gojXFQ" });
+
+  await fetch(`${BACKEND_URL}/register-device`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, lat, lng }),
+  });
+}
+
 function App() {
   const [position, setPosition] = useState([22.5726, 88.3639]); // default: Kolkata
   const [riskZones, setRiskZones] = useState([]);
@@ -28,8 +45,10 @@ function App() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setPosition([pos.coords.latitude, pos.coords.longitude]);
+          const { latitude, longitude } = pos.coords;
+          setPosition([latitude, longitude]);
           console.log("Accuracy in meters:", pos.coords.accuracy);
+          registerForNotifications(latitude, longitude);
         },
         (error) => {
           console.log("Location access denied or unavailable:", error.message);
@@ -41,10 +60,17 @@ function App() {
     }
   }, []);
 
+  // Listen for foreground notifications
+  useEffect(() => {
+    onMessage(messaging, (payload) => {
+      alert(`${payload.notification.title}: ${payload.notification.body}`);
+    });
+  }, []);
+
   // Fetch risk zones from backend whenever position changes
   useEffect(() => {
     const [lat, lng] = position;
-    fetch(`https://flood-backend-xk0l.onrender.com/risk-zones?lat=${lat}&lng=${lng}`)
+    fetch(`${BACKEND_URL}/risk-zones?lat=${lat}&lng=${lng}`)
       .then(res => res.json())
       .then(data => setRiskZones(data.zones))
       .catch(err => console.error('Failed to fetch risk zones:', err));
@@ -52,7 +78,7 @@ function App() {
 
   return (
     <div>
-      <h1>Flood Nowcasting App</h1>
+      <h1>Flood Nowcasting System</h1>
       <MapContainer center={position} zoom={13} style={{ height: '400px' }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <RecenterMap position={position} />
