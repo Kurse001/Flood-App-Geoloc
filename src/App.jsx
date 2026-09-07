@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+// firebase.js
+import { initializeApp } from "firebase/app";
+import { getMessaging } from "firebase/messaging";
+
+const firebaseApp = initializeApp({ /* your existing config */ });
+export const messaging = getMessaging(firebaseApp);
 
 // Fix for default marker icon not showing (using CDN instead of local imports)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -72,6 +78,50 @@ function App() {
           />
         ))}
       </MapContainer>
+    </div>
+  );
+}
+
+export default App;
+import { useEffect } from "react";
+import { getToken, onMessage } from "firebase/messaging";
+import { messaging } from "./firebase";
+
+// --- Notification helper functions ---
+
+async function registerForNotifications(lat, lng) {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const token = await getToken(messaging, { vapidKey: "YOUR_VAPID_KEY" });
+
+  await fetch(`${BACKEND_URL}/register-device`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, lat, lng }),
+  });
+}
+
+// --- Main App component ---
+
+function App() {
+  useEffect(() => {
+    // get user location and register device for notifications
+    navigator.geolocation.getCurrentPosition((position) => {
+      const { latitude, longitude } = position.coords;
+      registerForNotifications(latitude, longitude);
+    });
+
+    // listen for notifications while app is open (foreground)
+    onMessage(messaging, (payload) => {
+      alert(`${payload.notification.title}: ${payload.notification.body}`);
+      // replace alert() with a nicer in-app toast/banner later
+    });
+  }, []);
+
+  return (
+    <div>
+      {/* your existing map/JSX stays here — untouched */}
     </div>
   );
 }
