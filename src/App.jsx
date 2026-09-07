@@ -27,7 +27,7 @@ async function registerForNotifications(lat, lng) {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;
 
-  const token = await getToken(messaging, { vapidKey: "YOUR_VAPID_KEY" });
+  const token = await getToken(messaging, { vapidKey: "BKdWjY06m77EdHzb5Sq8ZZhZLkJAjMgCamdgLTHXq7dOlEt4B3gdC9VBXzQjzv-_yNn_hsidv5hWKTDo4gojXFQ" });
 
   await fetch(`${BACKEND_URL}/register-device`, {
     method: "POST",
