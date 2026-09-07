@@ -52,7 +52,7 @@ function App() {
 
   return (
     <div>
-      <h1>Flood Nowcasting App</h1>
+      <h1>Flood Nowcasting System</h1>
       <MapContainer center={position} zoom={13} style={{ height: '400px' }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <RecenterMap position={position} />
